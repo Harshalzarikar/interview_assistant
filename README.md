@@ -75,6 +75,24 @@ Artizence is a high-fidelity AI-driven interview platform that conducts real-tim
    npm run dev
    ```
 
+## Deployment (Render)
+
+This project is configured for deployment on [Render](https://render.com/).
+
+### Option A: Blueprint Deployment (Recommended)
+1. Push your code to GitHub.
+2. In Render, click **"New"** > **"Blueprint"**.
+3. Connect your repository.
+4. Render will use `render.yaml` to set up all services.
+5. **Important**: You must manually add your API keys in the Render Dashboard for each service.
+
+### Option B: Free Tier (Monolith)
+To run both the API and the Agent on a single Free Tier Web Service:
+1. Create a **Web Service** on Render.
+2. Set **Root Directory** to `backend`.
+3. Set **Start Command** to `./start.sh`.
+4. Add all environment variables.
+
 ## License
 
 © 2024 Artizence Labs Inc. All rights reserved.

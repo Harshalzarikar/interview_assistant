@@ -1,0 +1,55 @@
+services:
+  # 1. Frontend (Static Site)
+  - type: web
+    name: artizence-frontend
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    rootContext: frontend
+    envVars:
+      - key: VITE_API_URL
+        value: https://artizence-api.onrender.com # Replace with your actual backend URL after first deploy
+      - key: VITE_LIVEKIT_URL
+        sync: false # Set this in Render Dashboard
+
+  # 2. Backend API (FastAPI)
+  - type: web
+    name: artizence-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    rootContext: backend
+    envVars:
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+
+  # 3. AI Agent Worker (Background Worker)
+  # NOTE: Background Workers require a paid instance on Render ($7/mo).
+  # If you want to use the free tier, you can run this in the same service as the API (see README).
+  - type: worker
+    name: artizence-agent
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python agent.py start
+    rootContext: backend
+    envVars:
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: API_URL
+        value: https://artizence-api.onrender.com
