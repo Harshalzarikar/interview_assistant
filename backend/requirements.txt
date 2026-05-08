@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+livekit-api
+livekit-agents
+livekit-plugins-groq
+livekit-plugins-cartesia
+livekit-plugins-deepgram
+httpx
+pydantic

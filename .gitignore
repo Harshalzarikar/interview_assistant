@@ -1,0 +1,35 @@
+# Python
+**/__pycache__/
+**/*.py[cod]
+*$py.class
+**/venv/
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Environment variables
+.env
+**/ .env
+backend/.env
+frontend/.env
+
+# Node.js
+**/node_modules/
+**/dist/
+**/build/
+.npm
+*.log
+package-lock.json
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
