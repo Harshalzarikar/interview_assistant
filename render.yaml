@@ -3,7 +3,7 @@ services:
   - type: web
     name: artizence-frontend
     runtime: static
-    buildCommand: npm install --legacy-peer-deps && npm run build
+    buildCommand: yarn install && yarn build
     staticPublishPath: dist
     rootContext: frontend
     envVars:
