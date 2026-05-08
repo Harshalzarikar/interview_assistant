@@ -1,14 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   LiveKitRoom, 
-  VideoConference, 
-  RoomAudioRenderer, 
-  ControlBar,
+  RoomAudioRenderer,
   useLocalParticipant,
-  useTracks,
+  useConnectionState,
 } from '@livekit/components-react';
-import { Track } from 'livekit-client';
+import { ConnectionState } from 'livekit-client';
 import { Mic, MicOff, PhoneOff, Settings, Shield } from 'lucide-react';
 import '@livekit/components-styles';
 
@@ -43,31 +41,60 @@ const InterviewRoom = () => {
 const InterviewUI = ({ interviewer }) => {
   const navigate = useNavigate();
   const { localParticipant } = useLocalParticipant();
+  const connectionState = useConnectionState();
   const [isMuted, setIsMuted] = useState(false);
-  const [status, setStatus] = useState('Connecting...');
 
-  // Effect to handle status
+  // Ensure microphone is enabled once connected
   useEffect(() => {
-    if (localParticipant) setStatus('Live');
-  }, [localParticipant]);
-
-  const toggleMic = async () => {
-    if (localParticipant) {
-      const enabled = !isMuted;
-      await localParticipant.setMicrophoneEnabled(enabled);
-      setIsMuted(!enabled);
+    if (connectionState === ConnectionState.Connected && localParticipant) {
+      // Force-enable the microphone on connect to guarantee audio is publishing
+      localParticipant.setMicrophoneEnabled(true).then(() => {
+        setIsMuted(false);
+        console.log('[InterviewRoom] Microphone enabled, audio is publishing.');
+      }).catch((err) => {
+        console.error('[InterviewRoom] Failed to enable microphone:', err);
+      });
     }
+  }, [connectionState, localParticipant]);
+
+  // Sync mute state with the actual track state
+  useEffect(() => {
+    if (localParticipant) {
+      setIsMuted(!localParticipant.isMicrophoneEnabled);
+    }
+  }, [localParticipant?.isMicrophoneEnabled]);
+
+  const toggleMic = useCallback(async () => {
+    if (!localParticipant) return;
+    // If currently muted → enable mic; if currently on → mute it
+    const shouldEnable = isMuted;
+    await localParticipant.setMicrophoneEnabled(shouldEnable);
+    setIsMuted(!shouldEnable);
+  }, [localParticipant, isMuted]);
+
+  const getStatusText = () => {
+    switch (connectionState) {
+      case ConnectionState.Connecting: return 'Connecting...';
+      case ConnectionState.Connected: return 'Live';
+      case ConnectionState.Reconnecting: return 'Reconnecting...';
+      case ConnectionState.Disconnected: return 'Disconnected';
+      default: return 'Connecting...';
+    }
+  };
+
+  const getStatusColor = () => {
+    return connectionState === ConnectionState.Connected ? '#22c55e' : '#f59e0b';
   };
 
   return (
     <>
       <header className="interview-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '40px', height: '40px', background: '#2563eb', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '900' }}>F</div>
+          <div style={{ width: '40px', height: '40px', background: '#2563eb', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '900' }}>A</div>
           <div>
             <h3 style={{ margin: 0, fontSize: '1rem' }}>Interview with {interviewer.name}</h3>
             <span style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ width: '8px', height: '8px', background: '#22c55e', borderRadius: '50%' }}></span> {status}
+              <span style={{ width: '8px', height: '8px', background: getStatusColor(), borderRadius: '50%' }}></span> {getStatusText()}
             </span>
           </div>
         </div>
@@ -106,12 +133,16 @@ const InterviewUI = ({ interviewer }) => {
           <div style={{ background: '#1e293b', padding: '1.5rem', borderRadius: '1.5rem' }}>
             <h4 style={{ margin: '0 0 1rem 0', color: '#94a3b8', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>Your Audio</h4>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <div style={{ width: '48px', height: '48px', background: isMuted ? '#ef4444' : '#2563eb', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: '48px', height: '48px', background: isMuted ? '#ef4444' : '#2563eb', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'background 0.2s' }} onClick={toggleMic}>
                 {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
               </div>
               <div>
                 <p style={{ margin: 0, fontWeight: '600' }}>{isMuted ? 'Microphone Muted' : 'Microphone On'}</p>
-                <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>Speaking: {localParticipant?.identity}</p>
+                <p style={{ margin: 0, fontSize: '0.75rem', color: '#94a3b8' }}>
+                  {connectionState === ConnectionState.Connected 
+                    ? (isMuted ? 'Click to unmute' : 'Agent can hear you') 
+                    : 'Waiting for connection...'}
+                </p>
               </div>
             </div>
           </div>
