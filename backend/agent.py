@@ -29,27 +29,30 @@ logger = logging.getLogger("interview-agent")
 
 async def fetch_system_prompt(interviewer_id: str, candidate_name: str = "Candidate", language: str = "en") -> str:
     """Fetch the interviewer's system prompt from the API."""
-    api_url = os.getenv("API_URL", "https://interview-assistant-795o.onrender.com")
+    api_url = os.getenv("API_URL", "https://interview-assistant-795o.onrender.com").rstrip("/")
+    logger.info(f"Attempting to fetch prompt for '{interviewer_id}' from {api_url}")
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get(
                 f"{api_url}/api/interviewer/{interviewer_id}/prompt",
                 params={"candidate_name": candidate_name, "language": language},
-                timeout=5,
+                timeout=15.0,
             )
-            if resp.status_code == 200:
-                return resp.json()["prompt"]
+            resp.raise_for_status()
+            logger.info("Successfully fetched custom prompt.")
+            return resp.json()["prompt"]
     except Exception as e:
-        logger.warning(f"Could not fetch prompt for {interviewer_id}: {e}")
+        logger.error(f"Could not fetch prompt for {interviewer_id}: {type(e).__name__} - {e}")
 
     # Fallback generic prompt
+    lang_instruction = "IMPORTANT: Conduct the entire interview in Hindi. Speak naturally and clearly in Hindi." if language == "hi" else ""
     return (
-        f"You are a professional AI interviewer. Conduct a warm, engaging interview. "
+        f"You are a professional AI interviewer named {interviewer_id.capitalize()}. Conduct a warm, engaging interview. "
         f"The candidate's name is {candidate_name}. "
-        "Start with a brief introduction, ask relevant questions for the role, "
+        f"Start with a brief introduction, ask relevant questions for the role, "
         "listen carefully to answers, and ask thoughtful follow-ups. "
         "Keep your responses concise and conversational - this is a voice interview. "
-        "After about 7 minutes, provide brief constructive feedback and close the interview."
+        f"After about 7 minutes, provide brief constructive feedback and close the interview. {lang_instruction}"
     )
 
 
