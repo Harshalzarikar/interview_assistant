@@ -1,7 +1,4 @@
 #!/bin/bash
 
-# Start the AI Agent in the background
-python agent.py start &
-
-# Start the FastAPI server
+# Start the Monolith (FastAPI + AI Agent in one process)
 uvicorn api:app --host 0.0.0.0 --port $PORT

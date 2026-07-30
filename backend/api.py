@@ -17,7 +17,39 @@ from livekit.api import AccessToken, VideoGrants
 # Always load .env from the same directory as this file
 load_dotenv(Path(__file__).parent / ".env")
 
-app = FastAPI(title="AI Interview Platform", version="1.0.0")
+from contextlib import asynccontextmanager
+import asyncio
+from livekit.agents import WorkerOptions
+from livekit.agents.worker import AgentServer
+from agent import entrypoint
+
+_agent_server = None
+_worker_task = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _agent_server, _worker_task
+    try:
+        # Start LiveKit Agent inside the FastAPI process to save RAM on 512MB limit!
+        worker_opts = WorkerOptions(
+            entrypoint_fnc=entrypoint,
+            num_idle_processes=0,
+            load_threshold=1.0,
+        )
+        _agent_server = AgentServer.from_server_options(worker_opts)
+        _worker_task = asyncio.create_task(_agent_server.run())
+        print("LiveKit Agent Worker started in FastAPI process!")
+    except Exception as e:
+        print(f"Failed to start LiveKit worker: {e}")
+        
+    yield
+    
+    if _agent_server:
+        await _agent_server.aclose()
+    if _worker_task:
+        _worker_task.cancel()
+
+app = FastAPI(title="AI Interview Platform", version="1.0.0", lifespan=lifespan)
 
 # CORS - allow frontend dev server and production
 app.add_middleware(
