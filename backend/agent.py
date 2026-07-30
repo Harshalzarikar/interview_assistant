@@ -29,7 +29,7 @@ logger = logging.getLogger("interview-agent")
 
 async def fetch_system_prompt(interviewer_id: str, candidate_name: str = "Candidate", language: str = "en") -> str:
     """Fetch the interviewer's system prompt from the API."""
-    api_url = os.getenv("API_URL", "http://localhost:8000")
+    api_url = os.getenv("API_URL", "https://interview-assistant-795o.onrender.com")
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get(
