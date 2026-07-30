@@ -19,7 +19,7 @@ load_dotenv(Path(__file__).parent / ".env")
 
 from contextlib import asynccontextmanager
 import asyncio
-from livekit.agents import WorkerOptions
+from livekit.agents import WorkerOptions, JobExecutorType
 from livekit.agents.worker import AgentServer
 from agent import entrypoint
 
@@ -33,6 +33,7 @@ async def lifespan(app: FastAPI):
         # Start LiveKit Agent inside the FastAPI process to save RAM on 512MB limit!
         worker_opts = WorkerOptions(
             entrypoint_fnc=entrypoint,
+            job_executor_type=JobExecutorType.THREAD,
             num_idle_processes=0,
             load_threshold=1.0,
         )
@@ -54,7 +55,12 @@ app = FastAPI(title="AI Interview Platform", version="1.0.0", lifespan=lifespan)
 # CORS - allow frontend dev server and production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://artizence-frontend.onrender.com",
+        "https://interview-assistant-795o.onrender.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
