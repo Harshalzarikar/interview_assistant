@@ -6,11 +6,11 @@ import {
   useLocalParticipant,
   useConnectionState,
   useRemoteParticipants,
-  useTrackTranscription,
   useTracks,
+  VideoTrack,
 } from '@livekit/components-react';
 import { ConnectionState, Track, RoomEvent } from 'livekit-client';
-import { Mic, MicOff, PhoneOff, Settings, Shield, MessageSquare } from 'lucide-react';
+import { Mic, MicOff, PhoneOff, Settings, Shield, MessageSquare, Video, VideoOff } from 'lucide-react';
 import '@livekit/components-styles';
 
 const InterviewRoom = () => {
@@ -27,7 +27,7 @@ const InterviewRoom = () => {
   return (
     <div className="interview-room">
       <LiveKitRoom
-        video={false}
+        video={true}
         audio={true}
         token={token}
         serverUrl={import.meta.env.VITE_LIVEKIT_URL || 'wss://agent-creation-qcaw3q8p.livekit.cloud'}
@@ -41,18 +41,22 @@ const InterviewRoom = () => {
   );
 };
 
+/* ───────────────────── Local Video View ───────────────────── */
+const LocalVideoView = () => {
+  const tracks = useTracks([{ source: Track.Source.Camera, withPlaceholder: false }]);
+  const localTrack = tracks.find(t => t.participant.isLocal);
+  
+  if (!localTrack || !localTrack.publication?.isSubscribed || !localTrack.participant.isCameraEnabled) {
+    return <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', background: '#0f172a' }}>Camera Off</div>;
+  }
+  
+  return <VideoTrack trackRef={localTrack} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />;
+};
+
 /* ───────────────────── Transcript Panel ───────────────────── */
-const TranscriptPanel = () => {
-  const [messages, setMessages] = useState([]);
+const TranscriptPanel = ({ messages, setMessages }) => {
   const scrollRef = useRef(null);
-  const remoteParticipants = useRemoteParticipants();
-
-  // Get all audio tracks (agent + local) for transcription
-  const tracks = useTracks(
-    [{ source: Track.Source.Microphone, withPlaceholder: false }],
-    { onlySubscribed: true }
-  );
-
+  
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (scrollRef.current) {
@@ -108,7 +112,7 @@ const TranscriptPanel = () => {
     return () => {
       room.off(RoomEvent.TranscriptionReceived, handleTranscription);
     };
-  }, [localParticipant]);
+  }, [localParticipant, setMessages]);
 
   return (
     <div style={{
@@ -190,25 +194,25 @@ const InterviewUI = ({ interviewer }) => {
   const { localParticipant } = useLocalParticipant();
   const connectionState = useConnectionState();
   const [isMuted, setIsMuted] = useState(false);
+  const [isVideoOff, setIsVideoOff] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [isEnding, setIsEnding] = useState(false);
 
-  // Ensure microphone is enabled once connected
+  // Ensure microphone and camera are correctly synced
   useEffect(() => {
     if (connectionState === ConnectionState.Connected && localParticipant) {
-      localParticipant.setMicrophoneEnabled(true).then(() => {
-        setIsMuted(false);
-        console.log('[InterviewRoom] Microphone enabled, audio is publishing.');
-      }).catch((err) => {
-        console.error('[InterviewRoom] Failed to enable microphone:', err);
-      });
+      localParticipant.setMicrophoneEnabled(true).catch(err => console.error(err));
+      localParticipant.setCameraEnabled(true).catch(err => console.error(err));
     }
   }, [connectionState, localParticipant]);
 
-  // Sync mute state with the actual track state
+  // Sync state with actual track state
   useEffect(() => {
     if (localParticipant) {
       setIsMuted(!localParticipant.isMicrophoneEnabled);
+      setIsVideoOff(!localParticipant.isCameraEnabled);
     }
-  }, [localParticipant?.isMicrophoneEnabled]);
+  }, [localParticipant?.isMicrophoneEnabled, localParticipant?.isCameraEnabled]);
 
   const toggleMic = useCallback(async () => {
     if (!localParticipant) return;
@@ -216,6 +220,13 @@ const InterviewUI = ({ interviewer }) => {
     await localParticipant.setMicrophoneEnabled(shouldEnable);
     setIsMuted(!shouldEnable);
   }, [localParticipant, isMuted]);
+
+  const toggleVideo = useCallback(async () => {
+    if (!localParticipant) return;
+    const shouldEnable = isVideoOff;
+    await localParticipant.setCameraEnabled(shouldEnable);
+    setIsVideoOff(!shouldEnable);
+  }, [localParticipant, isVideoOff]);
 
   const getStatusText = () => {
     switch (connectionState) {
@@ -229,6 +240,31 @@ const InterviewUI = ({ interviewer }) => {
 
   const getStatusColor = () => {
     return connectionState === ConnectionState.Connected ? '#22c55e' : '#f59e0b';
+  };
+
+  const handleEndInterview = async () => {
+    setIsEnding(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/analyze-interview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: messages,
+          interviewer_id: interviewer.id,
+          candidate_name: sessionStorage.getItem('candidate_name') || 'Candidate'
+        })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        sessionStorage.setItem('interview_analysis', JSON.stringify(data));
+        navigate('/analysis');
+        return;
+      }
+    } catch (error) {
+      console.error("Failed to analyze interview", error);
+    }
+    // Fallback if failed
+    navigate('/');
   };
 
   return (
@@ -245,12 +281,12 @@ const InterviewUI = ({ interviewer }) => {
         </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <button className="control-btn" style={{ width: '40px', height: '40px' }}><Settings size={20} /></button>
-          <button className="control-btn" style={{ width: '40px', height: '40px', color: '#ef4444' }} onClick={() => navigate('/')}><PhoneOff size={20} /></button>
+          <button className="control-btn" style={{ width: '40px', height: '40px', color: '#ef4444' }} onClick={handleEndInterview} disabled={isEnding}><PhoneOff size={20} /></button>
         </div>
       </header>
 
       <main className="interview-main">
-        <div className="video-container">
+        <div className="video-container" style={{ position: 'relative' }}>
           <div className="video-slot">
             <div style={{ textAlign: 'center' }}>
               <img 
@@ -271,6 +307,11 @@ const InterviewUI = ({ interviewer }) => {
               <div className="visualizer-bar" style={{ animationDelay: '0.4s' }}></div>
               <div className="visualizer-bar" style={{ animationDelay: '0.5s' }}></div>
             </div>
+          </div>
+
+          {/* Local Video Overlay */}
+          <div style={{ position: 'absolute', bottom: '1.5rem', right: '1.5rem', width: '240px', height: '180px', borderRadius: '1rem', overflow: 'hidden', border: '3px solid #334155', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', zIndex: 10 }}>
+            <LocalVideoView />
           </div>
         </div>
 
@@ -294,7 +335,7 @@ const InterviewUI = ({ interviewer }) => {
           </div>
 
           {/* Live Transcript */}
-          <TranscriptPanel />
+          <TranscriptPanel messages={messages} setMessages={setMessages} />
 
           {/* Interview Info */}
           <div style={{ background: '#1e293b', padding: '1.5rem', borderRadius: '1.5rem' }}>
@@ -319,8 +360,14 @@ const InterviewUI = ({ interviewer }) => {
         >
           {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
         </button>
-        <button className="control-btn" style={{ background: '#ef4444', width: '120px', borderRadius: '999px', fontSize: '1rem', fontWeight: 'bold' }} onClick={() => navigate('/')}>
-          End Interview
+        <button 
+          className={`control-btn ${isVideoOff ? 'active' : ''}`} 
+          onClick={toggleVideo}
+        >
+          {isVideoOff ? <VideoOff size={24} /> : <Video size={24} />}
+        </button>
+        <button className="control-btn" style={{ background: '#ef4444', width: '150px', borderRadius: '999px', fontSize: '1rem', fontWeight: 'bold' }} onClick={handleEndInterview} disabled={isEnding}>
+          {isEnding ? 'Analyzing...' : 'End Interview'}
         </button>
       </footer>
     </>

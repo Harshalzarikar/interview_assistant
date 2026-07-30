@@ -22,19 +22,19 @@ from livekit.agents import (
     AgentSession,
 )
 from livekit.agents.voice import Agent
-from livekit.plugins import deepgram, groq
+from livekit.plugins import deepgram, groq, cartesia
 
 logger = logging.getLogger("interview-agent")
 
 
-async def fetch_system_prompt(interviewer_id: str, candidate_name: str = "Candidate") -> str:
+async def fetch_system_prompt(interviewer_id: str, candidate_name: str = "Candidate", language: str = "en") -> str:
     """Fetch the interviewer's system prompt from the API."""
     api_url = os.getenv("API_URL", "http://localhost:8000")
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get(
                 f"{api_url}/api/interviewer/{interviewer_id}/prompt",
-                params={"candidate_name": candidate_name},
+                params={"candidate_name": candidate_name, "language": language},
                 timeout=5,
             )
             if resp.status_code == 200:
@@ -75,18 +75,28 @@ async def entrypoint(ctx: JobContext):
 
     logger.info(f"Candidate name: {candidate_name}")
 
-    # Extract interviewer ID from room name (format: interview-{id}-{uuid})
+    # Extract language and interviewer ID from room name (format: interview-{language}-{id}-{uuid})
     parts = ctx.room.name.split("-")
-    interviewer_id = parts[1] if len(parts) >= 3 else "priya"
+    language = parts[1] if len(parts) >= 4 else "en"
+    interviewer_id = parts[2] if len(parts) >= 4 else "priya"
 
     # Fetch personalized system prompt
-    system_prompt = await fetch_system_prompt(interviewer_id, candidate_name)
+    system_prompt = await fetch_system_prompt(interviewer_id, candidate_name, language)
+
+    # Configure STT and TTS based on language
+    if language == "hi":
+        stt_model = deepgram.STT(model="nova-2", language="hi")
+        # Ensure CARTESIA_API_KEY is in .env or environment variables
+        tts_model = cartesia.TTS(model="sonic-multilingual", voice="a0e99841-438c-4a64-b3a0-ea1481cb31e0") # A natural-sounding voice
+    else:
+        stt_model = deepgram.STT(model="nova-2", language="en")
+        tts_model = deepgram.TTS(model="aura-asteria-en")
 
     # Build the AgentSession with STT, LLM, TTS (v1.5.x API)
     session = AgentSession(
-        stt=deepgram.STT(model="nova-2", language="en"),
+        stt=stt_model,
         llm=groq.LLM(model="llama-3.3-70b-versatile"),
-        tts=deepgram.TTS(model="aura-asteria-en"),
+        tts=tts_model,
     )
 
     # Create Agent with instructions

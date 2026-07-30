@@ -6,7 +6,7 @@ const HomePage = () => {
   const [interviewers, setInterviewers] = useState([]);
   const [selectedInterviewer, setSelectedInterviewer] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ name: '', email: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', language: 'en' });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -41,7 +41,8 @@ const HomePage = () => {
         body: JSON.stringify({
           interviewer_id: selectedInterviewer.id,
           candidate_name: formData.name,
-          candidate_email: formData.email
+          candidate_email: formData.email,
+          language: formData.language
         }),
       });
 
@@ -55,6 +56,7 @@ const HomePage = () => {
         sessionStorage.setItem('interview_token', data.token);
         sessionStorage.setItem('livekit_url', data.livekit_url);
         sessionStorage.setItem('interviewer', JSON.stringify(data.interviewer));
+        sessionStorage.setItem('candidate_name', formData.name);
         setShowModal(false);
         navigate(`/interview/${data.room_name}`);
       }
@@ -172,6 +174,17 @@ const HomePage = () => {
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 />
+              </div>
+              <div className="form-group">
+                <label>Interview Language</label>
+                <select 
+                  value={formData.language} 
+                  onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #334155', background: '#1e293b', color: 'white', marginTop: '0.5rem', marginBottom: '1.5rem' }}
+                >
+                  <option value="en">English</option>
+                  <option value="hi">Hindi</option>
+                </select>
               </div>
               <button type="submit" className="btn btn-primary btn-block" style={{ padding: '1rem' }} disabled={submitting}>
                 {submitting ? 'Starting...' : 'Start AI Interview'}
