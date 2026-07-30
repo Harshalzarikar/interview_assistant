@@ -38,7 +38,7 @@ services:
     name: artizence-agent
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python agent.py start
+    startCommand: python agent.py dev
     rootContext: backend
     envVars:
       - key: LIVEKIT_URL
