@@ -1,29 +1,25 @@
-# Artizence - AI Interview Platform
+# Artizence - Mock Interview System
 
-Artizence is a high-fidelity AI-driven interview platform that conducts real-time voice interviews. Built with React, FastAPI, LiveKit, Groq, and Deepgram.
+A high-fidelity AI-driven mock interview platform that conducts real-time voice interviews. Built with React, FastAPI, LiveKit, and Groq.
 
 ## Features
 
-- **Real-time Voice**: Ultra-low latency voice communication powered by LiveKit.
-- **Intelligent Interviewer**: Context-aware AI powered by Groq (Llama 3.3 70B).
-- **High-speed STT/TTS**: Deepgram Nova-2 for speech-to-text and Deepgram Aura for text-to-speech.
+- **Real-time Voice**: Ultra-low latency WebRTC voice communication powered by LiveKit.
+- **Intelligent Interviewer**: Context-aware AI powered by Groq's high-speed Qwen (qwen3.6-27b) model.
+- **Automated Interview Analysis**: Immediately after the interview, the AI analyzes the transcript and outputs strengths, weaknesses, and a score out of 10.
 - **Multiple Personas**: Dedicated interviewer personas (Technical, HR, PM, etc.).
-- **Modern UI**: Sleek, premium design built with React and custom CSS.
+- **Live Transcript**: Real-time STT streaming mapped directly to the beautiful React UI.
 
 ## Tech Stack
 
-- **Frontend**: React, Vite, LiveKit Components.
+- **Frontend**: React, Vite, LiveKit React Components (`useRoomContext`).
 - **Backend**: FastAPI, Python.
-- **Orchestration**: LiveKit Agents.
-- **AI Models**: 
-  - LLM: Groq (llama-3.3-70b-versatile)
-  - STT: Deepgram (nova-2)
-  - TTS: Deepgram (aura-asteria-en)
+- **Voice Orchestration**: LiveKit Agents Python SDK.
+- **LLM Engine**: Groq API (`qwen/qwen3.6-27b` for high-speed streaming capability).
 
 ## Prerequisites
 
 - **LiveKit Cloud**: Project keys from [LiveKit](https://livekit.io/).
-- **Deepgram**: API Key from [Deepgram](https://deepgram.com/).
 - **Groq**: API Key from [Groq](https://groq.com/).
 
 ## Setup Instructions
@@ -48,17 +44,13 @@ Artizence is a high-fidelity AI-driven interview platform that conducts real-tim
    LIVEKIT_URL=wss://your-project.livekit.cloud
    LIVEKIT_API_KEY=your_api_key
    LIVEKIT_API_SECRET=your_api_secret
-   DEEPGRAM_API_KEY=your_deepgram_key
    GROQ_API_KEY=your_groq_key
    ```
 5. Start the API server:
    ```bash
    python api.py
    ```
-6. Start the Agent worker (separate terminal):
-   ```bash
-   python agent.py dev
-   ```
+   *Note: The LiveKit Agent worker runs automatically inside the FastAPI process (`api.py`). You do NOT need to run `agent.py dev` manually!*
 
 ### 2. Frontend Setup
 
@@ -66,32 +58,20 @@ Artizence is a high-fidelity AI-driven interview platform that conducts real-tim
    ```bash
    cd frontend
    ```
-2. Install dependencies:
+2. Install dependencies (we use yarn):
    ```bash
-   npm install
+   yarn install
    ```
 3. Run the development server:
    ```bash
-   npm run dev
+   yarn dev
    ```
 
-## Deployment (Render)
-
-This project is configured for deployment on [Render](https://render.com/).
-
-### Option A: Blueprint Deployment (Recommended)
-1. Push your code to GitHub.
-2. In Render, click **"New"** > **"Blueprint"**.
-3. Connect your repository.
-4. Render will use `render.yaml` to set up all services.
-5. **Important**: You must manually add your API keys in the Render Dashboard for each service.
-
-### Option B: Free Tier (Monolith)
-To run both the API and the Agent on a single Free Tier Web Service:
-1. Create a **Web Service** on Render.
-2. Set **Root Directory** to `backend`.
-3. Set **Start Command** to `./start.sh`.
-4. Add all environment variables.
+### 3. API Testing (Postman)
+A Postman collection is included in the repository root for testing the backend independently.
+1. Open Postman.
+2. Click **Import** and select `InterviewAI_Postman_Collection.json`.
+3. Test endpoints like `/api/start-interview` and `/api/analyze-interview`.
 
 ## License
 
