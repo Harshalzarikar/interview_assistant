@@ -1,0 +1,164 @@
+{
+  "info": {
+    "name": "InterviewAI Backend API",
+    "description": "API endpoints for the InterviewAI backend, handling LiveKit tokens, interviewer prompts, and post-interview analysis.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Root Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            ""
+          ]
+        },
+        "description": "Health check for the FastAPI server."
+      }
+    },
+    {
+      "name": "Get Interviewers",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/interviewers",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "interviewers"
+          ]
+        },
+        "description": "Returns the catalog of available AI interviewers."
+      }
+    },
+    {
+      "name": "Start Interview",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"interviewer_id\": \"priya\",\n  \"candidate_name\": \"John Doe\",\n  \"candidate_email\": \"john@example.com\",\n  \"job_title\": \"Software Engineer\",\n  \"job_description\": \"We are looking for a Python developer.\",\n  \"language\": \"en\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/start-interview",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "start-interview"
+          ]
+        },
+        "description": "Generates a LiveKit token and returns connection details for the interview room."
+      }
+    },
+    {
+      "name": "Get Interviewer Prompt",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/interviewer/priya/prompt?candidate_name=John Doe&job_title=Software Engineer&language=en",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "interviewer",
+            "priya",
+            "prompt"
+          ],
+          "query": [
+            {
+              "key": "candidate_name",
+              "value": "John Doe"
+            },
+            {
+              "key": "job_title",
+              "value": "Software Engineer"
+            },
+            {
+              "key": "job_description",
+              "value": "",
+              "disabled": true
+            },
+            {
+              "key": "language",
+              "value": "en"
+            }
+          ]
+        },
+        "description": "Used internally by the agent to fetch the customized system prompt for the given candidate."
+      }
+    },
+    {
+      "name": "Analyze Interview",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transcript\": [\n    {\n      \"speakerName\": \"AI Interviewer\",\n      \"text\": \"Hello John, welcome to the interview.\"\n    },\n    {\n      \"speakerName\": \"You\",\n      \"text\": \"Hi, thank you for having me!\"\n    }\n  ],\n  \"interviewer_id\": \"priya\",\n  \"candidate_name\": \"John Doe\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/analyze-interview",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "analyze-interview"
+          ]
+        },
+        "description": "Sends the interview transcript to Groq/LLM to generate performance feedback and a score."
+      }
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    }
+  ]
+}
