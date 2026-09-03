@@ -8,6 +8,7 @@ import {
   useRemoteParticipants,
   useTracks,
   VideoTrack,
+  useRoomContext,
 } from '@livekit/components-react';
 import { ConnectionState, Track, RoomEvent } from 'livekit-client';
 import { Mic, MicOff, PhoneOff, Settings, Shield, MessageSquare, Video, VideoOff } from 'lucide-react';
@@ -65,12 +66,11 @@ const TranscriptPanel = ({ messages, setMessages }) => {
   }, [messages]);
 
   // Listen for transcription events from the room
+  const room = useRoomContext();
   const { localParticipant } = useLocalParticipant();
 
   useEffect(() => {
-    if (!localParticipant) return;
-    const room = localParticipant.room;
-    if (!room) return;
+    if (!room || !localParticipant) return;
 
     const handleTranscription = (segments, participant) => {
       if (!segments || segments.length === 0) return;
@@ -112,7 +112,7 @@ const TranscriptPanel = ({ messages, setMessages }) => {
     return () => {
       room.off(RoomEvent.TranscriptionReceived, handleTranscription);
     };
-  }, [localParticipant, setMessages]);
+  }, [room, localParticipant, setMessages]);
 
   return (
     <div style={{
@@ -290,10 +290,14 @@ const InterviewUI = ({ interviewer }) => {
           <div className="video-slot">
             <div style={{ textAlign: 'center' }}>
               <img 
-                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${interviewer.name}`} 
+                src={`/avatars/${interviewer.id}.jpg`} 
                 alt={interviewer.name} 
                 className="agent-avatar-large"
-                style={{ border: '4px solid #2563eb' }}
+                style={{ border: '4px solid var(--primary)', objectFit: 'cover' }}
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${interviewer.name}`;
+                }}
               />
               <h2 style={{ marginTop: '1.5rem', fontSize: '2.5rem' }}>{interviewer.name}</h2>
               <p style={{ color: '#94a3b8', fontSize: '1.125rem' }}>{interviewer.role}</p>

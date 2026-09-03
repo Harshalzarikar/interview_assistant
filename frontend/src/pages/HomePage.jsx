@@ -6,7 +6,7 @@ const HomePage = () => {
   const [interviewers, setInterviewers] = useState([]);
   const [selectedInterviewer, setSelectedInterviewer] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [formData, setFormData] = useState({ name: '', email: '', language: 'en' });
+  const [formData, setFormData] = useState({ jobTitle: '', jobDescription: '' });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -40,9 +40,11 @@ const HomePage = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           interviewer_id: selectedInterviewer.id,
-          candidate_name: formData.name,
-          candidate_email: formData.email,
-          language: formData.language
+          candidate_name: "Candidate",
+          candidate_email: "candidate@example.com",
+          job_title: formData.jobTitle,
+          job_description: formData.jobDescription,
+          language: "en"
         }),
       });
 
@@ -56,7 +58,7 @@ const HomePage = () => {
         sessionStorage.setItem('interview_token', data.token);
         sessionStorage.setItem('livekit_url', data.livekit_url);
         sessionStorage.setItem('interviewer', JSON.stringify(data.interviewer));
-        sessionStorage.setItem('candidate_name', formData.name);
+        sessionStorage.setItem('candidate_name', 'Candidate');
         setShowModal(false);
         navigate(`/interview/${data.room_name}`);
       }
@@ -81,7 +83,7 @@ const HomePage = () => {
       </nav>
 
       <section className="hero">
-        <h1>Try Our Superhuman AI Interviews</h1>
+        <h1 className="gradient-text">Try Our Superhuman AI Interviews</h1>
         <p>Trusted by teams with taste. Experience the future of hiring with real-time, voice-enabled AI technical and behavioral assessments.</p>
         
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
@@ -97,14 +99,18 @@ const HomePage = () => {
         {interviewers.map((interviewer) => (
           <div key={interviewer.id} className="interviewer-card">
             {interviewer.is_new && <span className="badge badge-new">New</span>}
-            <div className={`badge`} style={{ position: 'absolute', top: '1rem', left: '1rem', background: '#000', color: '#fff' }}>
+            <div className={`badge badge-type`}>
               {interviewer.type}
             </div>
             
             <img 
-              src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${interviewer.name}`} 
+              src={`/avatars/${interviewer.id}.jpg`} 
               alt={interviewer.name} 
               className="interviewer-avatar"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${interviewer.name}`;
+              }}
             />
             
             <h3 className="card-title">{interviewer.name}</h3>
@@ -114,8 +120,8 @@ const HomePage = () => {
               {interviewer.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}
             </div>
 
-            <div style={{ marginBottom: '1.5rem' }}>
-              <img src={`https://logo.clearbit.com/${interviewer.company.toLowerCase()}.com`} alt={interviewer.company} style={{ height: '24px', opacity: 0.6 }} />
+            <div className="company-logo-container">
+              <span>🏢 {interviewer.company}</span>
             </div>
 
             <div className="card-footer">
@@ -156,35 +162,25 @@ const HomePage = () => {
 
             <form onSubmit={handleSubmit}>
               <div className="form-group">
-                <label>Full Name</label>
+                <label>Job Title</label>
                 <input 
                   type="text" 
-                  placeholder="John Smith" 
+                  placeholder="e.g. Senior Software Engineer" 
                   required 
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  value={formData.jobTitle}
+                  onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
                 />
               </div>
               <div className="form-group">
-                <label>Business Email</label>
-                <input 
-                  type="email" 
-                  placeholder="john.smith@company.com" 
+                <label>Job Description</label>
+                <textarea 
+                  placeholder="Paste the job description or core requirements here..." 
                   required 
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  rows="4"
+                  value={formData.jobDescription}
+                  onChange={(e) => setFormData({ ...formData, jobDescription: e.target.value })}
+                  style={{ width: '100%', padding: '0.875rem 1rem', background: '#fff', border: '1px solid var(--border)', borderRadius: '0.75rem', fontSize: '1rem', outline: 'none', transition: 'all 0.2s', color: 'var(--text-main)', boxSizing: 'border-box', fontFamily: 'inherit', resize: 'vertical' }}
                 />
-              </div>
-              <div className="form-group">
-                <label>Interview Language</label>
-                <select 
-                  value={formData.language} 
-                  onChange={(e) => setFormData({ ...formData, language: e.target.value })}
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #334155', background: '#1e293b', color: 'white', marginTop: '0.5rem', marginBottom: '1.5rem' }}
-                >
-                  <option value="en">English</option>
-                  <option value="hi">Hindi</option>
-                </select>
               </div>
               <button type="submit" className="btn btn-primary btn-block" style={{ padding: '1rem' }} disabled={submitting}>
                 {submitting ? 'Starting...' : 'Start AI Interview'}

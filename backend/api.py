@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import datetime
+import json
 from livekit.api import AccessToken, VideoGrants
 
 # Always load .env from the same directory as this file
@@ -192,6 +193,8 @@ class StartInterviewRequest(BaseModel):
     interviewer_id: str
     candidate_name: str
     candidate_email: str
+    job_title: str = ""
+    job_description: str = ""
     language: str = "en"
 
 
@@ -248,6 +251,10 @@ async def start_interview(req: StartInterviewRequest):
         AccessToken(API_KEY, API_SECRET)
         .with_identity(req.candidate_email or req.candidate_name)
         .with_name(req.candidate_name)
+        .with_metadata(json.dumps({
+            "job_title": req.job_title,
+            "job_description": req.job_description
+        }))
         .with_grants(
             VideoGrants(
                 room_join=True,
@@ -269,15 +276,23 @@ async def start_interview(req: StartInterviewRequest):
 
 
 @app.get("/api/interviewer/{interviewer_id}/prompt")
-async def get_system_prompt(interviewer_id: str, candidate_name: str = "Candidate", language: str = "en"):
+async def get_system_prompt(interviewer_id: str, candidate_name: str = "Candidate", job_title: str = "", job_description: str = "", language: str = "en"):
     """Return the system prompt for an interviewer (used by agent)."""
     base_prompt = SYSTEM_PROMPTS.get(interviewer_id)
     if not base_prompt:
         raise HTTPException(status_code=404, detail="Interviewer not found")
     
-    # Inject candidate name and language into the prompt
-    lang_instruction = "IMPORTANT: Conduct the entire interview in Hindi. Speak naturally and clearly in Hindi." if language == "hi" else ""
-    full_prompt = f"{base_prompt}\n\nThe candidate's name is {candidate_name}. Please greet them by name. {lang_instruction}"
+    full_prompt = f"{base_prompt}\n\nThe candidate's name is {candidate_name}. Please greet them by name."
+    
+    if job_title:
+        full_prompt += f"\nYou are interviewing them for the role of: {job_title}."
+    if job_description:
+        full_prompt += f"\nHere is the job description and core requirements to focus on:\n{job_description}"
+        
+    if language == "hi":
+        full_prompt += " IMPORTANT: Conduct the entire interview in Hindi. Speak naturally and clearly in Hindi."
+    
+    full_prompt += "\nIMPORTANT: Do not use any emojis, asterisks, markdown formatting, or special characters. Speak in plain conversational text."
     
     return {"prompt": full_prompt, "interviewer_id": interviewer_id}
 
@@ -302,6 +317,8 @@ Provide a concise JSON response with the following keys:
 - "feedback": A short paragraph summarizing overall performance.
 - "score": A score out of 10 (number).
 
+Output STRICTLY valid JSON only, without any markdown formatting.
+
 Transcript:
 {formatted_transcript}
 """
@@ -313,7 +330,7 @@ Transcript:
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
                 json={
-                    "model": "llama-3.3-70b-versatile",
+                    "model": "qwen/qwen3.6-27b",
                     "messages": [{"role": "user", "content": prompt}],
                     "response_format": {"type": "json_object"},
                     "temperature": 0.2
