@@ -13,7 +13,7 @@ const HomePage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL}/api/interviewers`)
+    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/interviewers`)
       .then(res => res.json())
       .then(data => {
         setInterviewers(data.interviewers);
