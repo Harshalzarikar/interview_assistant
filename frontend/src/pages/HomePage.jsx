@@ -86,13 +86,6 @@ const HomePage = () => {
         <h1 className="gradient-text">Try Our Superhuman AI Interviews</h1>
         <p>Trusted by teams with taste. Experience the future of hiring with real-time, voice-enabled AI technical and behavioral assessments.</p>
         
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-          <span className="badge" style={{ background: '#2563eb', color: 'white' }}>All</span>
-          <span className="badge">Coding</span>
-          <span className="badge">Case Study</span>
-          <span className="badge">Roleplay</span>
-          <span className="badge">Conversational</span>
-        </div>
       </section>
 
       <div className="interviewer-grid">
