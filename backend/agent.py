@@ -122,7 +122,16 @@ async def entrypoint(ctx: JobContext):
         tts_model = cartesia.TTS(model="sonic-multilingual", voice="a0e99841-438c-4a64-b3a0-ea1481cb31e0") # A natural-sounding voice
     else:
         stt_model = deepgram.STT(model="nova-2", language="en")
-        tts_model = deepgram.TTS(model="aura-asteria-en")
+        
+        # Select male voice based on interviewer ID
+        if interviewer_id == "alex":
+            voice = "aura-orion-en" # US Male
+        elif interviewer_id == "harry":
+            voice = "aura-arcas-en" # Deep US Male
+        else:
+            voice = "aura-orion-en"
+            
+        tts_model = deepgram.TTS(model=voice)
 
     # Build the AgentSession with STT, LLM, TTS (v1.5.x API)
     session = AgentSession(
