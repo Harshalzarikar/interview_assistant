@@ -218,7 +218,19 @@ async def get_system_prompt(interviewer_id: str, candidate_name: str = "Candidat
         full_prompt += " IMPORTANT: Conduct the entire interview in Hindi. Speak naturally and clearly in Hindi."
     
     full_prompt += "\nIMPORTANT: Do not use any emojis, asterisks, markdown formatting, or special characters. Speak in plain conversational text."
-    full_prompt += "\nCRITICAL RULES:\n1. Ask exactly ONE question at a time, then WAIT for the candidate to speak.\n2. NEVER repeat a question you already asked, even if interrupted.\n3. DO NOT end the interview early. Ask follow-up questions to keep the conversation going."
+    full_prompt += (
+        "\nCRITICAL RULES:"
+        "\n1. Ask exactly ONE question at a time, then WAIT silently for the candidate to finish speaking."
+        "\n2. If the candidate's answer seems cut off, incomplete, or doesn't make sense, "
+        "ask them to clarify or continue - do NOT repeat the exact same question verbatim, "
+        "and do NOT move on as if they gave a full answer."
+        "\n3. Conduct at least 6-8 distinct question exchanges before wrapping up. "
+        "Do not end the interview after only 2-3 exchanges even if answers are short."
+        "\n4. Never end the interview yourself. You will be told explicitly when it is time to close. "
+        "Until then, always ask a follow-up or a new question."
+        "\n5. If an answer is vague or very short, ask a specific follow-up probing for more detail "
+        "instead of moving to feedback or ending the conversation."
+    )
     
     return {"prompt": full_prompt, "interviewer_id": interviewer_id}
 
