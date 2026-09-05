@@ -127,7 +127,7 @@ async def entrypoint(ctx: JobContext):
     # Build the AgentSession with STT, LLM, TTS (v1.5.x API)
     session = AgentSession(
         stt=stt_model,
-        llm=groq.LLM(model="qwen/qwen3.6-27b"),
+        llm=groq.LLM(model="openai/gpt-oss-20b"),
         tts=tts_model,
     )
 
