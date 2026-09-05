@@ -218,7 +218,7 @@ async def get_system_prompt(interviewer_id: str, candidate_name: str = "Candidat
         full_prompt += " IMPORTANT: Conduct the entire interview in Hindi. Speak naturally and clearly in Hindi."
     
     full_prompt += "\nIMPORTANT: Do not use any emojis, asterisks, markdown formatting, or special characters. Speak in plain conversational text."
-    full_prompt += "\nCRITICAL: You must ask exactly ONE question and then STOP. Do NOT generate or hallucinate the candidate's response. Wait for the candidate to speak."
+    full_prompt += "\nCRITICAL RULES:\n1. Ask exactly ONE question at a time, then WAIT for the candidate to speak.\n2. NEVER repeat a question you already asked, even if interrupted.\n3. DO NOT end the interview early. Ask follow-up questions to keep the conversation going."
     
     return {"prompt": full_prompt, "interviewer_id": interviewer_id}
 
