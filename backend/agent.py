@@ -37,7 +37,6 @@ from livekit.agents import (
 from livekit.agents.voice import Agent
 from livekit.agents.llm import ChatContext
 from livekit.plugins import deepgram, groq, cartesia, silero
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 logger = logging.getLogger("interview-agent")
 
@@ -165,13 +164,12 @@ async def entrypoint(ctx: JobContext):
 
         tts_model = deepgram.TTS(model=voice)
 
-    # Build the AgentSession with STT, LLM, TTS, VAD and turn detection (v1.5.x API)
+    # Build the AgentSession with STT, LLM, TTS, and VAD (v1.5.x API)
     session = AgentSession(
         stt=stt_model,
         llm=build_llm(),
         tts=tts_model,
         vad=silero.VAD.load(),
-        turn_detection=MultilingualModel(),
         min_endpointing_delay=0.8,   # give the candidate room to pause/think
         max_endpointing_delay=6.0,
     )
