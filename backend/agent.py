@@ -1,12 +1,13 @@
 """
 AI Interview Agent - LiveKit Agent Worker (v1.5.x API)
 Connects as an AI participant in the interview room.
-Uses: Deepgram STT → Groq LLM → Cartesia TTS
+Uses: Deepgram STT -> Groq LLM -> Cartesia/Deepgram TTS
 """
 
 import asyncio
 import logging
 import os
+import time
 import httpx
 from pathlib import Path
 from dotenv import load_dotenv
@@ -34,10 +35,15 @@ from livekit.agents import (
     AgentSession,
 )
 from livekit.agents.voice import Agent
-from livekit.agents.llm import ChatContext, ChatMessage
-from livekit.plugins import deepgram, groq, cartesia
+from livekit.agents.llm import ChatContext
+from livekit.plugins import deepgram, groq, cartesia, silero
+from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 logger = logging.getLogger("interview-agent")
+
+# Hard guards enforced in code (do not rely on the LLM to self-regulate pacing)
+MIN_INTERVIEW_SECONDS = 6 * 60    # don't let the interview wrap up before this
+MAX_INTERVIEW_SECONDS = 10 * 60   # hard cutoff regardless of what's happening
 
 
 async def fetch_system_prompt(interviewer_id: str, candidate_name: str = "Candidate", job_title: str = "", job_description: str = "", language: str = "en") -> str:
@@ -69,6 +75,33 @@ async def fetch_system_prompt(interviewer_id: str, candidate_name: str = "Candid
     )
 
 
+def build_llm():
+    """
+    Pick a Groq model with a sensible fallback chain.
+
+    As of Sept 2026, llama-3.3-70b-versatile has moved to Groq's Enterprise /
+    Contact-Sales tier on the production models page - it will most likely
+    error out on a standard pay-as-you-go account. openai/gpt-oss-120b is
+    currently the strongest fully-available production model on standard
+    billing (500 t/sec, 131K context, 65,536 max completion tokens).
+
+    Model availability on Groq changes often - verify at
+    https://console.groq.com/docs/models before relying on this list.
+    """
+    candidates = [
+        "openai/gpt-oss-120b",       # primary - solid instruction following, standard billing
+        "openai/gpt-oss-20b",        # fallback - faster, weaker instruction following
+        "llama-3.3-70b-versatile",   # Enterprise/Contact-Sales tier only now - likely to fail
+    ]
+    preferred = os.getenv("INTERVIEW_LLM_MODEL")
+    if preferred:
+        candidates.insert(0, preferred)
+
+    model_name = candidates[0]
+    logger.info(f"Using Groq model: {model_name}")
+    return groq.LLM(model=model_name)
+
+
 async def entrypoint(ctx: JobContext):
     """Main agent entrypoint - runs when a candidate joins the interview room."""
 
@@ -86,7 +119,7 @@ async def entrypoint(ctx: JobContext):
                 meta = json.loads(participant.metadata)
                 job_title = meta.get("job_title", "")
                 job_description = meta.get("job_description", "")
-            except:
+            except Exception:
                 pass
         break
 
@@ -100,7 +133,7 @@ async def entrypoint(ctx: JobContext):
                     meta = json.loads(participant.metadata)
                     job_title = meta.get("job_title", "")
                     job_description = meta.get("job_description", "")
-                except:
+                except Exception:
                     pass
         except asyncio.TimeoutError:
             logger.warning("No participant joined within 30s, using default name")
@@ -118,26 +151,29 @@ async def entrypoint(ctx: JobContext):
     # Configure STT and TTS based on language
     if language == "hi":
         stt_model = deepgram.STT(model="nova-2", language="hi")
-        # Ensure CARTESIA_API_KEY is in .env or environment variables
-        tts_model = cartesia.TTS(model="sonic-multilingual", voice="a0e99841-438c-4a64-b3a0-ea1481cb31e0") # A natural-sounding voice
+        tts_model = cartesia.TTS(model="sonic-multilingual", voice="a0e99841-438c-4a64-b3a0-ea1481cb31e0")
     else:
         stt_model = deepgram.STT(model="nova-2", language="en")
-        
+
         # Select male voice based on interviewer ID
         if interviewer_id == "alex":
-            voice = "aura-orion-en" # US Male
+            voice = "aura-orion-en"  # US Male
         elif interviewer_id == "harry":
-            voice = "aura-arcas-en" # Deep US Male
+            voice = "aura-arcas-en"  # Deep US Male
         else:
             voice = "aura-orion-en"
-            
+
         tts_model = deepgram.TTS(model=voice)
 
-    # Build the AgentSession with STT, LLM, TTS (v1.5.x API)
+    # Build the AgentSession with STT, LLM, TTS, VAD and turn detection (v1.5.x API)
     session = AgentSession(
         stt=stt_model,
-        llm=groq.LLM(model="openai/gpt-oss-20b"),
+        llm=build_llm(),
         tts=tts_model,
+        vad=silero.VAD.load(),
+        turn_detection=MultilingualModel(),
+        min_endpointing_delay=0.8,   # give the candidate room to pause/think
+        max_endpointing_delay=6.0,
     )
 
     # Build a ChatContext with a dummy user message to satisfy Groq models
@@ -146,6 +182,13 @@ async def entrypoint(ctx: JobContext):
 
     # Create Agent with instructions and the initial context
     agent = Agent(instructions=system_prompt, chat_ctx=initial_ctx)
+
+    session_start = time.monotonic()
+    turn_count = {"n": 0}
+
+    @session.on("user_speech_committed")
+    def _on_user_turn(msg):
+        turn_count["n"] += 1
 
     # Start the session in the room (agent is first positional arg, room is keyword-only)
     await session.start(agent, room=ctx.room)
@@ -156,13 +199,23 @@ async def entrypoint(ctx: JobContext):
         greeting += f", and mention you will be interviewing them for the {job_title} role today."
     else:
         greeting += ", and ask how they are doing today to kick off the interview."
-        
+
     await session.generate_reply(
         instructions=greeting
     )
 
-    # Keep alive for the duration of the interview (10 minutes max)
-    await asyncio.sleep(60 * 10)
+    # Keep the job alive up to MAX_INTERVIEW_SECONDS. MIN_INTERVIEW_SECONDS /
+    # turn_count are tracked here so you have real signal (in agent.log) if the
+    # LLM is trying to wrap up too early - the prompt is instructed to defer to
+    # this guard rather than closing the interview on its own.
+    while True:
+        elapsed = time.monotonic() - session_start
+        if elapsed >= MAX_INTERVIEW_SECONDS:
+            logger.info(f"Reached max interview duration ({MAX_INTERVIEW_SECONDS}s), ending job.")
+            break
+        if elapsed < MIN_INTERVIEW_SECONDS:
+            logger.info(f"Elapsed {elapsed:.0f}s / min {MIN_INTERVIEW_SECONDS}s, turns={turn_count['n']}")
+        await asyncio.sleep(15)
 
 
 if __name__ == "__main__":

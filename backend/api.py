@@ -43,9 +43,9 @@ async def lifespan(app: FastAPI):
         print("LiveKit Agent Worker started in FastAPI process!")
     except Exception as e:
         print(f"Failed to start LiveKit worker: {e}")
-        
+
     yield
-    
+
     if _agent_server:
         await _agent_server.aclose()
     if _worker_task:
@@ -67,7 +67,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Interviewer Catalog ────────────────────────────────────────────────────────
+# -- Interviewer Catalog ----------------------------------------------------
 INTERVIEWERS = [
     {
         "id": "alex",
@@ -93,7 +93,7 @@ INTERVIEWERS = [
     },
 ]
 
-# ── System Prompts per Interviewer ─────────────────────────────────────────────
+# -- System Prompts per Interviewer -----------------------------------------
 SYSTEM_PROMPTS = {
     "alex": """You are Alex, a Technical Lead and Senior Software Engineer conducting a coding interview.
 You focus on software engineering fundamentals, algorithms, and system design.
@@ -113,7 +113,7 @@ Keep responses concise and natural for a voice conversation.
 After 10 minutes, thank them and provide encouragement.""",
 }
 
-# ── Pydantic Models ────────────────────────────────────────────────────────────
+# -- Pydantic Models ---------------------------------------------------------
 class StartInterviewRequest(BaseModel):
     interviewer_id: str
     candidate_name: str
@@ -136,7 +136,7 @@ class AnalyzeInterviewRequest(BaseModel):
     candidate_name: str
 
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
+# -- Routes -------------------------------------------------------------------
 @app.get("/")
 async def root():
     return {"message": "AI Interview Platform API", "status": "running"}
@@ -206,18 +206,23 @@ async def get_system_prompt(interviewer_id: str, candidate_name: str = "Candidat
     base_prompt = SYSTEM_PROMPTS.get(interviewer_id)
     if not base_prompt:
         raise HTTPException(status_code=404, detail="Interviewer not found")
-    
+
     full_prompt = f"{base_prompt}\n\nThe candidate's name is {candidate_name}. Please greet them by name."
-    
+
     if job_title:
         full_prompt += f"\nYou are interviewing them for the role of: {job_title}."
     if job_description:
         full_prompt += f"\nHere is the job description and core requirements to focus on:\n{job_description}"
-        
+
     if language == "hi":
         full_prompt += " IMPORTANT: Conduct the entire interview in Hindi. Speak naturally and clearly in Hindi."
-    
+
     full_prompt += "\nIMPORTANT: Do not use any emojis, asterisks, markdown formatting, or special characters. Speak in plain conversational text."
+
+    # Tightened pacing / clarification rules. The agent-side code also enforces
+    # a hard MIN_INTERVIEW_SECONDS guard - this prompt defers to that rather
+    # than trying to self-regulate duration, which small/fast LLMs are
+    # unreliable at doing from prose instructions alone.
     full_prompt += (
         "\nCRITICAL RULES:"
         "\n1. Ask exactly ONE question at a time, then WAIT silently for the candidate to finish speaking."
@@ -231,7 +236,7 @@ async def get_system_prompt(interviewer_id: str, candidate_name: str = "Candidat
         "\n5. If an answer is vague or very short, ask a specific follow-up probing for more detail "
         "instead of moving to feedback or ending the conversation."
     )
-    
+
     return {"prompt": full_prompt, "interviewer_id": interviewer_id}
 
 
@@ -268,7 +273,9 @@ Transcript:
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
                 json={
-                    "model": "openai/gpt-oss-20b",
+                    # NOTE: verify this model is still available on your account -
+                    # see https://console.groq.com/docs/models
+                    "model": "openai/gpt-oss-120b",
                     "messages": [{"role": "user", "content": prompt}],
                     "response_format": {"type": "json_object"},
                     "temperature": 0.2

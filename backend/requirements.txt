@@ -8,3 +8,5 @@ livekit-plugins-cartesia
 livekit-plugins-deepgram
 httpx
 pydantic
+livekit-plugins-silero
+livekit-plugins-turn-detector
