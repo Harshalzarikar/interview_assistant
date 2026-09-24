@@ -13,7 +13,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import json
 
-load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(Path(__file__).parent / ".env", override=True)
 
 # Configure logging to write to both file and console
 logging.basicConfig(

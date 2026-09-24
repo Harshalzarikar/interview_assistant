@@ -16,13 +16,14 @@ import json
 from livekit.api import AccessToken, VideoGrants
 
 # Always load .env from the same directory as this file
-load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(Path(__file__).parent / ".env", override=True)
 
 from contextlib import asynccontextmanager
 import asyncio
 from livekit.agents import WorkerOptions, JobExecutorType
 from livekit.agents.worker import AgentServer
 from agent import entrypoint
+from mock_interview_store import complete_session, create_session, get_session, update_session
 
 _agent_server = None
 _worker_task = None
@@ -58,6 +59,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
+        "http://127.0.0.1:5173",
         "http://localhost:3000",
         "https://artizence-frontend.onrender.com",
         "https://interview-assistant-795o.onrender.com"
@@ -136,6 +138,85 @@ class AnalyzeInterviewRequest(BaseModel):
     candidate_name: str
 
 
+class CreateMockInterviewRequest(BaseModel):
+    interviewer_id: str
+    candidate_name: str
+    candidate_email: str
+    job_title: str = ""
+    job_description: str = ""
+    language: str = "en"
+
+
+class CompleteMockInterviewRequest(BaseModel):
+    transcript: list
+
+
+def _get_livekit_credentials():
+    livekit_url = os.getenv("LIVEKIT_URL")
+    api_key = os.getenv("LIVEKIT_API_KEY")
+    api_secret = os.getenv("LIVEKIT_API_SECRET")
+    if not all([livekit_url, api_key, api_secret]):
+        raise HTTPException(
+            status_code=500,
+            detail="LiveKit credentials not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET in .env",
+        )
+    return livekit_url, api_key, api_secret
+
+
+def _build_livekit_session(req: StartInterviewRequest):
+    livekit_url, api_key, api_secret = _get_livekit_credentials()
+    interviewer = next((i for i in INTERVIEWERS if i["id"] == req.interviewer_id), None)
+    if not interviewer:
+        raise HTTPException(status_code=404, detail="Interviewer not found")
+
+    room_name = f"interview-{req.language}-{req.interviewer_id}-{uuid.uuid4().hex[:8]}"
+    token = (
+        AccessToken(api_key, api_secret)
+        .with_identity(req.candidate_email or req.candidate_name)
+        .with_name(req.candidate_name)
+        .with_metadata(
+            json.dumps(
+                {
+                    "job_title": req.job_title,
+                    "job_description": req.job_description,
+                }
+            )
+        )
+        .with_grants(
+            VideoGrants(
+                room_join=True,
+                room=room_name,
+                can_publish=True,
+                can_subscribe=True,
+            )
+        )
+        .with_ttl(datetime.timedelta(hours=1))
+        .to_jwt()
+    )
+    return livekit_url, room_name, token, interviewer
+
+
+def _public_session_view(record: dict) -> dict:
+    """Strip LiveKit token from API responses."""
+    return {
+        "session_id": record["session_id"],
+        "status": record["status"],
+        "created_at": record.get("created_at"),
+        "completed_at": record.get("completed_at"),
+        "candidate_name": record.get("candidate_name"),
+        "candidate_email": record.get("candidate_email"),
+        "job_title": record.get("job_title"),
+        "job_description": record.get("job_description"),
+        "language": record.get("language"),
+        "interviewer_id": record.get("interviewer_id"),
+        "interviewer": record.get("interviewer"),
+        "room_name": record.get("room_name"),
+        "interview_link": record.get("interview_link"),
+        "transcript": record.get("transcript") or [],
+        "analysis": record.get("analysis"),
+    }
+
+
 # -- Routes -------------------------------------------------------------------
 @app.get("/")
 async def root():
@@ -151,53 +232,89 @@ async def get_interviewers():
 @app.post("/api/start-interview", response_model=TokenResponse)
 async def start_interview(req: StartInterviewRequest):
     """Generate a LiveKit token and start an interview session."""
-    LIVEKIT_URL = os.getenv("LIVEKIT_URL")
-    API_KEY = os.getenv("LIVEKIT_API_KEY")
-    API_SECRET = os.getenv("LIVEKIT_API_SECRET")
-
-    if not all([LIVEKIT_URL, API_KEY, API_SECRET]):
-        raise HTTPException(
-            status_code=500,
-            detail="LiveKit credentials not configured. Set LIVEKIT_URL, LIVEKIT_API_KEY, LIVEKIT_API_SECRET in .env",
-        )
-
-    # Find interviewer
-    interviewer = next(
-        (i for i in INTERVIEWERS if i["id"] == req.interviewer_id), None
-    )
-    if not interviewer:
-        raise HTTPException(status_code=404, detail="Interviewer not found")
-
-    # Create unique room with language embedded
-    room_name = f"interview-{req.language}-{req.interviewer_id}-{uuid.uuid4().hex[:8]}"
-
-    # Build LiveKit token
-    token = (
-        AccessToken(API_KEY, API_SECRET)
-        .with_identity(req.candidate_email or req.candidate_name)
-        .with_name(req.candidate_name)
-        .with_metadata(json.dumps({
-            "job_title": req.job_title,
-            "job_description": req.job_description
-        }))
-        .with_grants(
-            VideoGrants(
-                room_join=True,
-                room=room_name,
-                can_publish=True,
-                can_subscribe=True,
-            )
-        )
-        .with_ttl(datetime.timedelta(hours=1))  # 1 hour TTL
-        .to_jwt()
-    )
-
+    livekit_url, room_name, token, interviewer = _build_livekit_session(req)
     return TokenResponse(
         token=token,
         room_name=room_name,
-        livekit_url=LIVEKIT_URL,
+        livekit_url=livekit_url,
         interviewer=interviewer,
     )
+
+
+@app.post("/api/mock-interviews")
+async def create_mock_interview(req: CreateMockInterviewRequest):
+    """Create a shareable mock interview link (for Postman / integrations)."""
+    start_req = StartInterviewRequest(**req.model_dump())
+    livekit_url, room_name, token, interviewer = _build_livekit_session(start_req)
+
+    session_id = uuid.uuid4().hex
+    frontend_base = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173").rstrip("/")
+    interview_link = f"{frontend_base}/join/{session_id}"
+
+    record = create_session(
+        session_id,
+        {
+            "candidate_name": req.candidate_name,
+            "candidate_email": req.candidate_email,
+            "job_title": req.job_title,
+            "job_description": req.job_description,
+            "language": req.language,
+            "interviewer_id": req.interviewer_id,
+            "interviewer": interviewer,
+            "room_name": room_name,
+            "livekit_url": livekit_url,
+            "token": token,
+            "interview_link": interview_link,
+        },
+    )
+    return _public_session_view(record)
+
+
+@app.get("/api/mock-interviews/{session_id}")
+async def get_mock_interview(session_id: str):
+    """Return mock interview details: transcript and analysis when available."""
+    record = get_session(session_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Mock interview not found")
+    return _public_session_view(record)
+
+
+@app.get("/api/mock-interviews/{session_id}/join")
+async def join_mock_interview(session_id: str):
+    """Return LiveKit credentials for the candidate join page."""
+    record = get_session(session_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Mock interview not found")
+    if record.get("status") == "completed":
+        raise HTTPException(status_code=400, detail="This interview is already completed")
+
+    update_session(session_id, status="in_progress")
+    return {
+        "session_id": session_id,
+        "token": record["token"],
+        "room_name": record["room_name"],
+        "livekit_url": record["livekit_url"],
+        "interviewer": record["interviewer"],
+        "candidate_name": record.get("candidate_name"),
+    }
+
+
+@app.post("/api/mock-interviews/{session_id}/complete")
+async def complete_mock_interview(session_id: str, req: CompleteMockInterviewRequest):
+    """Save transcript, run analysis, and mark the mock interview completed."""
+    record = get_session(session_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Mock interview not found")
+
+    analysis = await analyze_interview(
+        AnalyzeInterviewRequest(
+            transcript=req.transcript,
+            interviewer_id=record["interviewer_id"],
+            candidate_name=record.get("candidate_name") or "Candidate",
+        )
+    )
+    updated = complete_session(session_id, req.transcript, analysis)
+    return _public_session_view(updated)
 
 
 @app.get("/api/interviewer/{interviewer_id}/prompt")

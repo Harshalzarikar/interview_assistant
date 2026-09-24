@@ -71,7 +71,10 @@ A high-fidelity AI-driven mock interview platform that conducts real-time voice 
 A Postman collection is included in the repository root for testing the backend independently.
 1. Open Postman.
 2. Click **Import** and select `InterviewAI_Postman_Collection.json`.
-3. Test endpoints like `/api/start-interview` and `/api/analyze-interview`.
+3. Set `base_url` (default `http://localhost:8000`). For production links, set `FRONTEND_BASE_URL` in backend `.env`.
+4. **Create mock interview link**: `POST /api/mock-interviews` — response includes `interview_link` and `session_id` (auto-saved in collection variables).
+5. **Get details**: `GET /api/mock-interviews/{session_id}` — returns `transcript` and `analysis` when the interview is completed.
+6. Optional test without UI: run **Complete Mock Interview** after create, then call **Get Mock Interview Details** again.
 
 ## License
 

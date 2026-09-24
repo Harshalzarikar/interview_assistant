@@ -10,6 +10,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Local mock interview session data
+backend/data/mock_interviews.json
+
 # Environment variables
 .env
 **/ .env

@@ -31,7 +31,7 @@ const InterviewRoom = () => {
         video={true}
         audio={true}
         token={token}
-        serverUrl={import.meta.env.VITE_LIVEKIT_URL || 'wss://agent-creation-qcaw3q8p.livekit.cloud'}
+        serverUrl={sessionStorage.getItem('livekit_url') || import.meta.env.VITE_LIVEKIT_URL || 'wss://agent-creation-qcaw3q8p.livekit.cloud'}
         onDisconnected={() => navigate('/')}
         connect={true}
       >
@@ -244,26 +244,39 @@ const InterviewUI = ({ interviewer }) => {
 
   const handleEndInterview = async () => {
     setIsEnding(true);
+    const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const mockSessionId = sessionStorage.getItem('mock_session_id');
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/analyze-interview`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transcript: messages,
-          interviewer_id: interviewer.id,
-          candidate_name: sessionStorage.getItem('candidate_name') || 'Candidate'
-        })
-      });
+      const response = mockSessionId
+        ? await fetch(`${apiBase}/api/mock-interviews/${mockSessionId}/complete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transcript: messages }),
+          })
+        : await fetch(`${apiBase}/api/analyze-interview`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              transcript: messages,
+              interviewer_id: interviewer.id,
+              candidate_name: sessionStorage.getItem('candidate_name') || 'Candidate',
+            }),
+          });
+
       if (response.ok) {
         const data = await response.json();
-        sessionStorage.setItem('interview_analysis', JSON.stringify(data));
+        if (mockSessionId) {
+          sessionStorage.removeItem('mock_session_id');
+          sessionStorage.setItem('interview_analysis', JSON.stringify(data.analysis || data));
+        } else {
+          sessionStorage.setItem('interview_analysis', JSON.stringify(data));
+        }
         navigate('/analysis');
         return;
       }
     } catch (error) {
       console.error("Failed to analyze interview", error);
     }
-    // Fallback if failed
     navigate('/');
   };
 
