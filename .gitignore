@@ -15,9 +15,12 @@ backend/data/mock_interviews.json
 
 # Environment variables
 .env
-**/ .env
+**/.env
 backend/.env
 frontend/.env
+
+# Agent / tooling scratch
+.commandcode/
 
 # Node.js
 **/node_modules/

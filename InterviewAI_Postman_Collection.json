@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "InterviewAI Backend API",
-    "description": "API endpoints for the InterviewAI backend: mock interview links, LiveKit tokens, and post-interview transcript/analysis.",
+    "description": "API endpoints for the InterviewAI (Artizence) backend: mock interview links, LiveKit tokens, and post-interview transcript/analysis.\n\nQuick start:\n1. Set `base_url` (default http://localhost:8000, or https://interview-assistant-795o.onrender.com for prod).\n2. Run `Create Mock Interview Link` — `session_id` and `interview_link` are auto-saved to collection variables.\n3. Use `Join Mock Interview` to fetch LiveKit credentials, or `Complete Mock Interview` to test analysis without the UI.\n\nAll routes are served by FastAPI in backend/api.py.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -18,7 +18,7 @@
               "host": ["{{base_url}}"],
               "path": [""]
             },
-            "description": "Health check for the FastAPI server."
+            "description": "Health check for the FastAPI server. Returns { message, status }."
           }
         },
         {
@@ -31,7 +31,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "interviewers"]
             },
-            "description": "Returns the catalog of available AI interviewers (e.g. alex, harry)."
+            "description": "Returns the catalog of available AI interviewers (alex, harry)."
           }
         }
       ]
@@ -51,6 +51,7 @@
                   "  const body = pm.response.json();",
                   "  pm.collectionVariables.set('session_id', body.session_id);",
                   "  pm.collectionVariables.set('interview_link', body.interview_link);",
+                  "  pm.test('status is pending', () => pm.expect(body.status).to.eql('pending'));",
                   "}"
                 ]
               }
@@ -73,7 +74,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "mock-interviews"]
             },
-            "description": "Creates a mock interview session and returns `interview_link` for the candidate. Saves `session_id` to collection variables for follow-up calls."
+            "description": "Creates a mock interview session and returns `interview_link` for the candidate. Saves `session_id` and `interview_link` to collection variables for follow-up calls.\n\nBody: interviewer_id, candidate_name, candidate_email are required; job_title, job_description, language are optional (language defaults to \"en\", use \"hi\" for Hindi)."
           }
         },
         {
@@ -87,6 +88,35 @@
               "path": ["api", "mock-interviews", "{{session_id}}"]
             },
             "description": "Returns session metadata, `transcript`, and `analysis` (null until the interview is completed). Status: pending | in_progress | completed."
+          }
+        },
+        {
+          "name": "Join Mock Interview",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('livekit_token', body.token);",
+                  "  pm.collectionVariables.set('room_name', body.room_name);",
+                  "  pm.collectionVariables.set('livekit_url', body.livekit_url);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/mock-interviews/{{session_id}}/join",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mock-interviews", "{{session_id}}", "join"]
+            },
+            "description": "Returns LiveKit credentials (token, room_name, livekit_url) for the candidate join page and flips status to in_progress. Returns 400 if the interview is already completed; 404 if the session is unknown."
           }
         },
         {
@@ -135,7 +165,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "start-interview"]
             },
-            "description": "Generates a LiveKit token without creating a persisted mock session."
+            "description": "Generates a LiveKit token without creating a persisted mock session. Returns token, room_name, livekit_url, interviewer."
           }
         },
         {
@@ -154,7 +184,7 @@
                 { "key": "language", "value": "en" }
               ]
             },
-            "description": "Used by the LiveKit agent to fetch the customized system prompt."
+            "description": "Used by the LiveKit agent to fetch the customized system prompt for an interviewer."
           }
         },
         {
@@ -176,7 +206,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "analyze-interview"]
             },
-            "description": "Sends a transcript to Groq and returns strengths, weaknesses, feedback, and score."
+            "description": "Sends a transcript to Groq and returns strengths, weaknesses, feedback, and score (0-10). Requires GROQ_API_KEY on the server."
           }
         }
       ]
@@ -195,6 +225,21 @@
     },
     {
       "key": "interview_link",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "livekit_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "room_name",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "livekit_url",
       "value": "",
       "type": "string"
     }
