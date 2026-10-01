@@ -6,7 +6,7 @@ A high-fidelity AI-driven mock interview platform that conducts real-time voice 
 
 - **Real-time Voice**: Ultra-low latency WebRTC voice communication powered by LiveKit.
 - **Intelligent Interviewer**: Context-aware AI powered by Groq's high-speed Qwen (qwen3.6-27b) model.
-- **Automated Interview Analysis**: Immediately after the interview, the AI analyzes the transcript and outputs strengths, weaknesses, and a score out of 10.
+- **Detailed Interview Analysis**: Immediately after the interview, the AI analyzes the transcript and produces a full report — overall score and readiness, a five-dimension score breakdown (Communication, Technical Depth, Problem Solving, Clarity, Confidence), strengths, weaknesses, a question-by-question review, overall feedback, and next steps.
 - **Multiple Personas**: Dedicated interviewer personas (Technical, HR, PM, etc.).
 - **Live Transcript**: Real-time STT streaming mapped directly to the beautiful React UI.
 
@@ -73,8 +73,9 @@ A Postman collection is included in the repository root for testing the backend 
 2. Click **Import** and select `InterviewAI_Postman_Collection.json`.
 3. Set `base_url` (default `http://localhost:8000`). For production links, set `FRONTEND_BASE_URL` in backend `.env`.
 4. **Create mock interview link**: `POST /api/mock-interviews` — response includes `interview_link` and `session_id` (auto-saved in collection variables).
-5. **Get details**: `GET /api/mock-interviews/{session_id}` — returns `transcript` and `analysis` when the interview is completed.
-6. Optional test without UI: run **Complete Mock Interview** after create, then call **Get Mock Interview Details** again.
+5. **Create room from job details**: `POST /api/mock-interview-rooms` — send only `job_title` and `job_description`; the response includes `mock_interview_room_url` and `room_id` (auto-saved in collection variables).
+6. **Get details**: `GET /api/mock-interviews/{session_id}` — returns `transcript` and `analysis` when the interview is completed.
+7. Optional test without UI: run **Complete Mock Interview** after create, then call **Get Mock Interview Details** again.
 
 ## License
 

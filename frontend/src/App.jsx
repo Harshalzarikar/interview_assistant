@@ -9,6 +9,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<HomePage />} />
       <Route path="/join/:sessionId" element={<JoinInterviewPage />} />
+      <Route path="/room/:sessionId" element={<JoinInterviewPage />} />
       <Route path="/interview/:roomName" element={<InterviewRoom />} />
       <Route path="/analysis" element={<AnalysisPage />} />
     </Routes>

@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "InterviewAI Backend API",
-    "description": "API endpoints for the InterviewAI (Artizence) backend: mock interview links, LiveKit tokens, and post-interview transcript/analysis.\n\nQuick start:\n1. Set `base_url` (default http://localhost:8000, or https://interview-assistant-795o.onrender.com for prod).\n2. Run `Create Mock Interview Link` — `session_id` and `interview_link` are auto-saved to collection variables.\n3. Use `Join Mock Interview` to fetch LiveKit credentials, or `Complete Mock Interview` to test analysis without the UI.\n\nAll routes are served by FastAPI in backend/api.py.",
+    "description": "API endpoints for the InterviewAI (Artizence) backend: mock interview links, LiveKit tokens, and post-interview transcript/analysis.\n\nQuick start:\n1. Set `base_url` (default http://localhost:8000, or https://interview-assistant-795o.onrender.com for prod).\n2. Run `Create Mock Interview Link` (full details) or `Create Mock Interview Room (job only)` (just job_title + job_description) — `session_id`/`room_id` and the generated link are auto-saved to collection variables.\n3. Use `Join Mock Interview` to fetch LiveKit credentials, or `Complete Mock Interview` to test analysis without the UI.\n\nAll routes are served by FastAPI in backend/api.py.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -78,6 +78,45 @@
           }
         },
         {
+          "name": "Create Mock Interview Room (job only)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('room_id', body.room_id);",
+                  "  pm.collectionVariables.set('session_id', body.room_id);",
+                  "  pm.collectionVariables.set('mock_interview_room_url', body.mock_interview_room_url);",
+                  "  pm.test('room url contains /room/', () => pm.expect(body.mock_interview_room_url).to.include('/room/'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"job_title\": \"Software Engineer\",\n  \"job_description\": \"Python backend role with FastAPI experience.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/mock-interview-rooms",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mock-interview-rooms"]
+            },
+            "description": "Creates a mock interview room from just a job title and description and returns `mock_interview_room_url` (resolves to the /room/{room_id} join page). Saves `room_id` and `mock_interview_room_url` to collection variables."
+          }
+        },
+        {
           "name": "Get Mock Interview Details",
           "request": {
             "method": "GET",
@@ -121,6 +160,30 @@
         },
         {
           "name": "Complete Mock Interview (manual / test)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('status is completed', () => pm.expect(body.status).to.eql('completed'));",
+                  "  pm.test('analysis has detailed report fields', () => {",
+                  "    const a = body.analysis || {};",
+                  "    pm.expect(a).to.have.property('score');",
+                  "    pm.expect(a).to.have.property('readiness');",
+                  "    pm.expect(a.dimensions).to.be.an('array').with.lengthOf(5);",
+                  "    pm.expect(a).to.have.property('strengths');",
+                  "    pm.expect(a).to.have.property('weaknesses');",
+                  "    pm.expect(a).to.have.property('recommendations');",
+                  "    pm.expect(a).to.have.property('question_breakdown');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -189,6 +252,30 @@
         },
         {
           "name": "Analyze Interview",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  pm.test('score is a number from 0 to 10', () => pm.expect(body.score).to.be.a('number').within(0, 10));",
+                  "  pm.test('has detailed report fields', () => {",
+                  "    pm.expect(body).to.have.property('readiness');",
+                  "    pm.expect(body).to.have.property('summary');",
+                  "    pm.expect(body.dimensions).to.be.an('array').with.lengthOf(5);",
+                  "    pm.expect(body).to.have.property('strengths');",
+                  "    pm.expect(body).to.have.property('weaknesses');",
+                  "    pm.expect(body).to.have.property('feedback');",
+                  "    pm.expect(body).to.have.property('recommendations');",
+                  "    pm.expect(body).to.have.property('question_breakdown');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "POST",
             "header": [
@@ -206,7 +293,7 @@
               "host": ["{{base_url}}"],
               "path": ["api", "analyze-interview"]
             },
-            "description": "Sends a transcript to Groq and returns strengths, weaknesses, feedback, and score (0-10). Requires GROQ_API_KEY on the server."
+            "description": "Sends a transcript to Groq and returns a detailed report: score (0-10), readiness, summary, dimensions (Communication, Technical Depth, Problem Solving, Clarity, Confidence), strengths, weaknesses, feedback, recommendations, and a question_breakdown. Requires GROQ_API_KEY on the server."
           }
         }
       ]
@@ -225,6 +312,16 @@
     },
     {
       "key": "interview_link",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "room_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "mock_interview_room_url",
       "value": "",
       "type": "string"
     },

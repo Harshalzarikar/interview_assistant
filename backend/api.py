@@ -151,6 +151,18 @@ class CompleteMockInterviewRequest(BaseModel):
     transcript: list
 
 
+class CreateMockInterviewRoomRequest(BaseModel):
+    job_title: str
+    job_description: str
+
+
+class MockInterviewRoomResponse(BaseModel):
+    room_id: str
+    mock_interview_room_url: str
+    status: str
+    interviewer: dict
+
+
 def _get_livekit_credentials():
     livekit_url = os.getenv("LIVEKIT_URL")
     api_key = os.getenv("LIVEKIT_API_KEY")
@@ -270,6 +282,49 @@ async def create_mock_interview(req: CreateMockInterviewRequest):
     return _public_session_view(record)
 
 
+@app.post("/api/mock-interview-rooms", response_model=MockInterviewRoomResponse)
+async def create_mock_interview_room(req: CreateMockInterviewRoomRequest):
+    """Create a mock interview room link from a job title and description."""
+    start_req = StartInterviewRequest(
+        interviewer_id="alex",
+        candidate_name="Candidate",
+        candidate_email="",
+        job_title=req.job_title,
+        job_description=req.job_description,
+    )
+    livekit_url, room_name, token, interviewer = _build_livekit_session(start_req)
+
+    room_id = uuid.uuid4().hex
+    frontend_base = (
+        os.getenv("INTERVIEW_AGENT_FRONTEND_URL")
+        or os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
+    ).rstrip("/")
+    mock_interview_room_url = f"{frontend_base}/room/{room_id}"
+
+    record = create_session(
+        room_id,
+        {
+            "candidate_name": "Candidate",
+            "candidate_email": "",
+            "job_title": req.job_title,
+            "job_description": req.job_description,
+            "language": "en",
+            "interviewer_id": "alex",
+            "interviewer": interviewer,
+            "room_name": room_name,
+            "livekit_url": livekit_url,
+            "token": token,
+            "interview_link": mock_interview_room_url,
+        },
+    )
+    return MockInterviewRoomResponse(
+        room_id=record["session_id"],
+        mock_interview_room_url=mock_interview_room_url,
+        status=record["status"],
+        interviewer=interviewer,
+    )
+
+
 @app.get("/api/mock-interviews/{session_id}")
 async def get_mock_interview(session_id: str):
     """Return mock interview details: transcript and analysis when available."""
@@ -357,10 +412,37 @@ async def get_system_prompt(interviewer_id: str, candidate_name: str = "Candidat
     return {"prompt": full_prompt, "interviewer_id": interviewer_id}
 
 
+ANALYSIS_MODEL = os.getenv("INTERVIEW_LLM_MODEL", "openai/gpt-oss-120b")
+
+# Keys the frontend report expects. Used to fill in anything the model omits.
+ANALYSIS_FIELDS = [
+    "score",
+    "readiness",
+    "summary",
+    "dimensions",
+    "strengths",
+    "weaknesses",
+    "feedback",
+    "recommendations",
+    "question_breakdown",
+]
+
+
+def _fill_analysis_defaults(analysis: dict) -> dict:
+    """Return the analysis with every expected key present so the UI never breaks."""
+    result = {}
+    for field in ANALYSIS_FIELDS:
+        value = analysis.get(field)
+        if value is None:
+            value = [] if field in ("dimensions", "strengths", "weaknesses", "recommendations", "question_breakdown") else ""
+        result[field] = value
+    return result
+
+
 @app.post("/api/analyze-interview")
 async def analyze_interview(req: AnalyzeInterviewRequest):
-    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-    if not GROQ_API_KEY:
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if not groq_api_key:
         raise HTTPException(status_code=500, detail="GROQ_API_KEY not configured")
 
     formatted_transcript = ""
@@ -369,15 +451,23 @@ async def analyze_interview(req: AnalyzeInterviewRequest):
         text = msg.get("text", "")
         formatted_transcript += f"{role}: {text}\n"
 
-    prompt = f"""You are an expert HR and Technical Interview Assessor.
-Analyze the following interview transcript between {req.candidate_name} and the AI Interviewer.
-Provide a concise JSON response with the following keys:
-- "strengths": List of 3 strong points demonstrated by the candidate (strings).
-- "weaknesses": List of 3 areas of improvement (strings).
-- "feedback": A short paragraph summarizing overall performance.
-- "score": A score out of 10 (number).
+    prompt = f"""You are an expert HR and technical interview assessor.
+Analyze the interview transcript between {req.candidate_name} and the AI interviewer.
 
-Output STRICTLY valid JSON only, without any markdown formatting.
+Return STRICTLY valid JSON (no markdown, no extra text) with EXACTLY these keys:
+- "score": overall score out of 10 (number).
+- "readiness": one of "Interview-ready", "Nearly ready", "Needs practice".
+- "summary": 2-3 sentence overview of the candidate's performance.
+- "dimensions": array of exactly 5 objects, each {{"name", "score", "comment"}}, using these names in this order: "Communication", "Technical Depth", "Problem Solving", "Clarity", "Confidence". Each score is out of 10.
+- "strengths": array of 3-5 specific strengths (strings).
+- "weaknesses": array of 3-5 specific areas to improve (strings).
+- "feedback": one paragraph of overall feedback.
+- "recommendations": array of 3-5 concrete, actionable next steps.
+- "question_breakdown": array with one object per main question asked, each {{"question", "rating", "comment"}} where rating is "strong", "ok", or "weak".
+
+Rules:
+- Base every point ONLY on what is in the transcript. Do not invent details.
+- Be specific and refer to what the candidate actually said.
 
 Transcript:
 {formatted_transcript}
@@ -388,23 +478,26 @@ Transcript:
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                headers={"Authorization": f"Bearer {groq_api_key}"},
                 json={
                     # NOTE: verify this model is still available on your account -
                     # see https://console.groq.com/docs/models
-                    "model": "openai/gpt-oss-120b",
+                    "model": ANALYSIS_MODEL,
                     "messages": [{"role": "user", "content": prompt}],
                     "response_format": {"type": "json_object"},
-                    "temperature": 0.2
+                    "temperature": 0.2,
+                    "max_tokens": 2000,
                 },
-                timeout=30.0
+                timeout=60.0,
             )
             resp.raise_for_status()
             data = resp.json()
             analysis_text = data["choices"][0]["message"]["content"]
-            return json.loads(analysis_text)
+            analysis = json.loads(analysis_text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate analysis: {str(e)}")
+
+    return _fill_analysis_defaults(analysis)
 
 
 if __name__ == "__main__":
