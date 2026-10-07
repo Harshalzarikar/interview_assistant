@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "InterviewAI Backend API",
-    "description": "API endpoints for the InterviewAI (Artizence) backend: mock interview links, LiveKit tokens, and post-interview transcript/analysis.\n\nQuick start:\n1. Set `base_url` (default http://localhost:8000, or https://interview-assistant-795o.onrender.com for prod).\n2. Run `Create Mock Interview Link` (full details) or `Create Mock Interview Room (job only)` (just job_title + job_description) — `session_id`/`room_id` and the generated link are auto-saved to collection variables.\n3. Use `Join Mock Interview` to fetch LiveKit credentials, or `Complete Mock Interview` to test analysis without the UI.\n\nAll routes are served by FastAPI in backend/api.py.",
+    "description": "API endpoints for the InterviewAI (Artizence) backend: mock interview links, LiveKit tokens, and post-interview transcript/analysis.\n\nQuick start:\n1. Set `base_url` (default http://localhost:8000, or https://interview-assistant-795o.onrender.com for prod).\n2. Run `Create Mock Interview Link` (full details) or `Create Mock Interview Room (job only)` (just job_title + job_description) — `session_id`/`room_id` and the generated link are auto-saved to collection variables.\n3. After the interview: `Get Mock Interview Result` (or `Get Mock Interview Details`) for transcript + analysis.\n4. Use `Join Mock Interview` for LiveKit credentials, or `Complete Mock Interview` to test analysis without the UI.\n\nAll routes are served by FastAPI in backend/api.py.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -126,7 +126,20 @@
               "host": ["{{base_url}}"],
               "path": ["api", "mock-interviews", "{{session_id}}"]
             },
-            "description": "Returns session metadata, `transcript`, and `analysis` (null until the interview is completed). Status: pending | in_progress | completed."
+            "description": "Returns session metadata, `transcript`, and `analysis` (null until the interview is completed). Status: pending | in_progress | completed.\n\nSame response as **Get Mock Interview Result** (`/result`)."
+          }
+        },
+        {
+          "name": "Get Mock Interview Result",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/mock-interviews/{{session_id}}/result",
+              "host": ["{{base_url}}"],
+              "path": ["api", "mock-interviews", "{{session_id}}", "result"]
+            },
+            "description": "Primary integration endpoint for transcript and analysis after a mock interview. Use `session_id` from **Create Mock Interview Link** or **Create Mock Interview Room**. Returns the same JSON as **Get Mock Interview Details**.\n\n- `transcript`: empty until the candidate finishes (or you call **Complete Mock Interview**)\n- `analysis`: null until `status` is `completed`"
           }
         },
         {

@@ -325,13 +325,23 @@ async def create_mock_interview_room(req: CreateMockInterviewRoomRequest):
     )
 
 
-@app.get("/api/mock-interviews/{session_id}")
-async def get_mock_interview(session_id: str):
-    """Return mock interview details: transcript and analysis when available."""
+def _get_mock_interview_response(session_id: str) -> dict:
     record = get_session(session_id)
     if not record:
         raise HTTPException(status_code=404, detail="Mock interview not found")
     return _public_session_view(record)
+
+
+@app.get("/api/mock-interviews/{session_id}")
+async def get_mock_interview(session_id: str):
+    """Return mock interview details: transcript and analysis when available."""
+    return _get_mock_interview_response(session_id)
+
+
+@app.get("/api/mock-interviews/{session_id}/result")
+async def get_mock_interview_result(session_id: str):
+    """Transcript + analysis result (same payload as GET /api/mock-interviews/{session_id})."""
+    return _get_mock_interview_response(session_id)
 
 
 @app.get("/api/mock-interviews/{session_id}/join")
